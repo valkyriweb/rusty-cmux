@@ -48,6 +48,26 @@ Profiles are intentionally isolated:
 
 The wrapper defaults `CMUX_SKIP_ZIG_BUILD=1` because Homebrew Zig on this machine is currently `0.16.x`, while cmux's Ghostty CLI helper build requires Zig `0.15.2`. Install/switch to Zig `0.15.2` and run `CMUX_SKIP_ZIG_BUILD=0 scripts/rusty-build-profile.sh <profile>` if you need to rebuild that helper.
 
+## Live browser smoke
+
+After launching the browser profile:
+
+```bash
+scripts/rusty-build-profile.sh browser --launch
+```
+
+Use the profile socket and bundled CLI directly when the app name is overridden:
+
+```bash
+CLI="$HOME/Library/Developer/Xcode/DerivedData/cmux-rusty-cmux-browser/Build/Products/Debug/Rusty cmux Browser.app/Contents/Resources/bin/cmux"
+CMUX_SOCKET_PATH=/tmp/cmux-debug-rusty-cmux-browser.sock \
+CMUX_BUNDLE_ID=com.valkyriweb.rustycmux.browser \
+CMUX_BUNDLED_CLI_PATH="$CLI" \
+  "$CLI" open https://example.com --json
+```
+
+Verified result on 2026-05-25: opened URL as `surface:2` in a right split, then `cmux browser surface:2 get url --json` returned `https://example.com/`.
+
 ## Current architecture notes
 
 cmux nouns:
