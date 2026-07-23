@@ -2155,6 +2155,8 @@ final class Workspace: Identifiable, ObservableObject {
     /// the variables the daemon relies on (CMUX_WORKSPACE_ID, CMUX_SOCKET_PATH, …).
     /// Persisted in the session manifest and restored before surfaces are rebuilt.
     @Published var workspaceEnvironment: [String: String] = [:]
+    /// Configured cmux shortcuts the focused terminal receives directly.
+    private(set) var shortcutPassthrough: Set<StoredShortcut> = []
     // Legacy in-memory state for old helpers/tests. Product UI, rendering, and
     // session persistence no longer honor per-workspace scrollbar overrides.
     @Published private(set) var terminalScrollBarHidden: Bool = false
@@ -2349,6 +2351,17 @@ final class Workspace: Identifiable, ObservableObject {
             return nil
         }
         return panel
+    }
+
+    func setShortcutPassthrough(_ shortcuts: [String]?) {
+        shortcutPassthrough = Set(shortcuts?.compactMap(StoredShortcut.parseConfig) ?? [])
+    }
+
+    func matchesShortcutPassthrough(event: NSEvent) -> Bool {
+        for shortcut in shortcutPassthrough where shortcut.matches(event: event) {
+            return true
+        }
+        return false
     }
 
     /// Forwards to

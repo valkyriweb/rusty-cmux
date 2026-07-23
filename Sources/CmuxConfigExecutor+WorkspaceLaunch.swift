@@ -153,6 +153,7 @@ extension CmuxConfigExecutor {
             workspaceEnvironment: wsDef.env ?? [:]
         )
         newWorkspace.setCustomTitle(workspaceName)
+        newWorkspace.setShortcutPassthrough(wsDef.shortcutPassthrough)
         if let color = wsDef.color {
             newWorkspace.setCustomColor(color)
         }

@@ -31,6 +31,9 @@ extension Workspace {
             cwd: baseCwd,
             color: customColor,
             env: workspaceEnvironment.isEmpty ? nil : workspaceEnvironment,
+            shortcutPassthrough: shortcutPassthrough.isEmpty
+                ? nil
+                : shortcutPassthrough.map(\.configIdentifier).sorted(),
             layout: root
         )
         return CmuxWorkspaceLayoutCapture(

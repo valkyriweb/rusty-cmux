@@ -10,6 +10,8 @@ struct CmuxWorkspaceDefinition: Codable, Sendable, Hashable {
     /// Bootstrap command sent to the workspace's first terminal before that
     /// terminal's own surface `command`. Other panes do not wait for it.
     var setup: String?
+    /// cmux shortcuts that the focused terminal receives instead of cmux.
+    var shortcutPassthrough: [String]?
     var layout: CmuxLayoutNode?
 
     init(
@@ -18,6 +20,7 @@ struct CmuxWorkspaceDefinition: Codable, Sendable, Hashable {
         color: String? = nil,
         env: [String: String]? = nil,
         setup: String? = nil,
+        shortcutPassthrough: [String]? = nil,
         layout: CmuxLayoutNode? = nil
     ) {
         self.name = name
@@ -25,6 +28,7 @@ struct CmuxWorkspaceDefinition: Codable, Sendable, Hashable {
         self.color = color
         self.env = env
         self.setup = setup
+        self.shortcutPassthrough = shortcutPassthrough
         self.layout = layout
     }
 
@@ -39,6 +43,7 @@ struct CmuxWorkspaceDefinition: Codable, Sendable, Hashable {
         } else {
             setup = nil
         }
+        shortcutPassthrough = try Self.decodeShortcutPassthrough(from: container)
         layout = try container.decodeIfPresent(CmuxLayoutNode.self, forKey: .layout)
 
         if let rawColor = try container.decodeIfPresent(String.self, forKey: .color) {
@@ -54,5 +59,31 @@ struct CmuxWorkspaceDefinition: Codable, Sendable, Hashable {
         } else {
             color = nil
         }
+    }
+
+    private static func decodeShortcutPassthrough(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [String]? {
+        guard container.contains(.shortcutPassthrough) else { return nil }
+        let rawShortcuts = try container.decode([String].self, forKey: .shortcutPassthrough)
+        var seen = Set<String>()
+        var shortcuts: [String] = []
+        for rawShortcut in rawShortcuts {
+            guard let shortcut = StoredShortcut.parseConfig(rawShortcut),
+                  !shortcut.isUnbound,
+                  !shortcut.hasChord,
+                  shortcut.command || shortcut.shift || shortcut.option || shortcut.control else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .shortcutPassthrough,
+                    in: container,
+                    debugDescription: "shortcutPassthrough entries must use modifier+key syntax like 'cmd+t'"
+                )
+            }
+            let normalized = shortcut.configIdentifier
+            if seen.insert(normalized).inserted {
+                shortcuts.append(normalized)
+            }
+        }
+        return shortcuts
     }
 }

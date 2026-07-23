@@ -418,6 +418,7 @@ export default function CustomCommandsPage() {
       "workspace": {
         "name": "Dev",
         "cwd": ".",
+        "shortcutPassthrough": ["cmd+t", "cmd+n", "ctrl+tab", "ctrl+shift+tab"],
         "layout": {
           "direction": "horizontal",
           "split": 0.5,
@@ -461,6 +462,7 @@ export default function CustomCommandsPage() {
         <li><code>color</code>: {t("wsFieldColor")}</li>
         <li><code>env</code>: {t("wsFieldEnv")}</li>
         <li><code>setup</code>: {t("wsFieldSetup")}</li>
+        <li><code>shortcutPassthrough</code>: {t("wsFieldShortcutPassthrough")}</li>
         <li><code>layout</code>: {t("wsFieldLayout")}</li>
       </ul>
 

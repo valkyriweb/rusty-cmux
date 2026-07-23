@@ -6441,6 +6441,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         )
     }
 
+    /// Whether a configured workspace shortcut belongs to the focused terminal,
+    /// rather than cmux. This resolves only the live responder and in-memory
+    /// workspace state, so it is safe to call for every key event.
+    func shouldPassthroughFocusedTerminalShortcut(event: NSEvent) -> Bool {
+        guard let terminalContext = focusedTerminalShortcutContext(preferredWindow: event.window),
+              let workspace = terminalContext.tabManager.tabs.first(where: { $0.id == terminalContext.workspaceId }) else {
+            return false
+        }
+        return workspace.matchesShortcutPassthrough(event: event)
+    }
+
     private func preferredMainWindowContextForShortcuts(event: NSEvent) -> MainWindowContext? {
         if let context = contextForMainWindow(event.window) {
             return context
@@ -12803,6 +12814,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             clearConfiguredShortcutChordState()
             return false
         }
+        if shouldPassthroughFocusedTerminalShortcut(event: event) {
+            clearConfiguredShortcutChordState()
+            return false
+        }
 
         // `charactersIgnoringModifiers` can be nil for some synthetic NSEvents and certain special keys.
         // Treat nil as "" and rely on keyCode/layout-aware fallback logic where needed.
@@ -16959,6 +16974,14 @@ private extension NSWindow {
         }()
         if ShortcutRecorderEventRouter.dispatchActiveRecordingEvent(event, preferredWindow: self) {
             return true
+        }
+        if let firstResponderGhosttyView,
+           AppDelegate.shared?.shouldPassthroughFocusedTerminalShortcut(event: event) == true {
+            return cmuxForceDispatchKeyDownOnce(
+                event,
+                to: firstResponderGhosttyView,
+                reason: "workspace shortcut passthrough"
+            )
         }
         let browserWebKitKeyDownReentry = firstResponderWebView != nil && cmuxBrowserWebKitKeyDownDispatchIsActive()
         if AppDelegate.shared?.shouldBypassPrintableOptionTextForShortcutRouting(event: event) == true {
