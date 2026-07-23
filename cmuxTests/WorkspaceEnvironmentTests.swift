@@ -170,6 +170,21 @@ struct WorkspaceEnvironmentTests {
     }
 
     @Test
+    func workspaceShortcutPassthroughSurvivesSessionRestore() {
+        let source = Workspace()
+        source.setShortcutPassthrough(["Command+T", "ctrl+shift+tab", "cmd+t"])
+
+        let snapshot = source.sessionSnapshot(includeScrollback: false)
+        #expect(snapshot.shortcutPassthrough == ["cmd+t", "ctrl+shift+tab"])
+
+        let restored = Workspace()
+        restored.restoreSessionSnapshot(snapshot)
+        #expect(
+            Set(restored.shortcutPassthrough.map(\.configIdentifier)) == Set(["cmd+t", "ctrl+shift+tab"])
+        )
+    }
+
+    @Test
     func emptyWorkspaceEnvironmentIsNotPersisted() {
         let workspace = Workspace()
         #expect(workspace.sessionSnapshot(includeScrollback: false).environment == nil)

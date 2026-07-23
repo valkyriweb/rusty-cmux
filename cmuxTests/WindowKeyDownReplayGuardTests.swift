@@ -57,6 +57,18 @@ struct WindowKeyDownReplayGuardTests {
         }
     }
 
+    private final class PassthroughTerminalProbeView: GhosttyNSView {
+        private(set) var keyDownEvents: [NSEvent] = []
+        var replaysRemaining = 0
+
+        override func keyDown(with event: NSEvent) {
+            keyDownEvents.append(event)
+            guard replaysRemaining > 0 else { return }
+            replaysRemaining -= 1
+            _ = window?.performKeyEquivalent(with: event)
+        }
+    }
+
     private final class EditableUndoProbeTextView: NSTextView {
         private(set) var undoCallCount = 0
 
@@ -357,5 +369,201 @@ struct WindowKeyDownReplayGuardTests {
         #expect(terminal.afterMenuMissEvents.map { $0.charactersIgnoringModifiers } == ["z"])
         #expect(terminal.keyDownEvents.map { $0.charactersIgnoringModifiers } == ["z"])
         #expect(textView.undoCallCount == 0)
+    }
+
+    @Test
+    func workspacePassthroughDispatchesRawEventOnceWithoutMenuAction() {
+        _ = NSApplication.shared
+        AppDelegate.installWindowResponderSwizzlesForTesting()
+        let originalAppDelegate = AppDelegate.shared
+        let appDelegate = originalAppDelegate ?? AppDelegate()
+        AppDelegate.shared = appDelegate
+        defer {
+            if originalAppDelegate == nil {
+                AppDelegate.shared = nil
+            }
+        }
+
+        let windowId = UUID()
+        let (window, workspace, terminal) = makeWorkspaceTerminalWindow(
+            appDelegate: appDelegate,
+            windowId: windowId
+        )
+        defer { closeWorkspaceTerminalWindow(window, appDelegate: appDelegate, windowId: windowId) }
+        workspace.setShortcutPassthrough(["cmd+t"])
+        terminal.replaysRemaining = 1
+
+        let menuProbe = MenuActionProbe()
+        let previousMenu = installCommandTMenu(probe: menuProbe)
+        defer { NSApp.mainMenu = previousMenu }
+
+        guard let event = makeCommandTKeyDownEvent(windowNumber: window.windowNumber) else {
+            Issue.record("Failed to construct Cmd+T key event")
+            return
+        }
+
+        #expect(window.performKeyEquivalent(with: event))
+        #expect(terminal.keyDownEvents.count == 1)
+        #expect(menuProbe.callCount == 0)
+    }
+
+    @Test
+    func workspacePassthroughLeavesNonOptedTerminalAndNonterminalMenuActionsEnabled() {
+        _ = NSApplication.shared
+        AppDelegate.installWindowResponderSwizzlesForTesting()
+        let originalAppDelegate = AppDelegate.shared
+        let appDelegate = originalAppDelegate ?? AppDelegate()
+        AppDelegate.shared = appDelegate
+        defer {
+            if originalAppDelegate == nil {
+                AppDelegate.shared = nil
+            }
+        }
+
+        let windowId = UUID()
+        let (window, workspace, terminal) = makeWorkspaceTerminalWindow(
+            appDelegate: appDelegate,
+            windowId: windowId
+        )
+        defer { closeWorkspaceTerminalWindow(window, appDelegate: appDelegate, windowId: windowId) }
+
+        let menuProbe = MenuActionProbe()
+        let previousMenu = installCommandTMenu(probe: menuProbe)
+        defer { NSApp.mainMenu = previousMenu }
+
+        guard let event = makeCommandTKeyDownEvent(windowNumber: window.windowNumber) else {
+            Issue.record("Failed to construct Cmd+T key event")
+            return
+        }
+
+        #expect(window.performKeyEquivalent(with: event))
+        #expect(menuProbe.callCount == 1)
+        #expect(terminal.keyDownEvents.isEmpty)
+
+        workspace.setShortcutPassthrough(["cmd+t"])
+        let browserProbe = ReplayingKeyDownView(frame: .zero)
+        window.contentView?.addSubview(browserProbe)
+        #expect(window.makeFirstResponder(browserProbe))
+
+        #expect(window.performKeyEquivalent(with: event))
+        #expect(menuProbe.callCount == 2)
+        #expect(terminal.keyDownEvents.isEmpty)
+    }
+
+    @Test
+    func workspacePassthroughUsesDispatchingWindowInsteadOfStaleEventWindow() {
+        _ = NSApplication.shared
+        AppDelegate.installWindowResponderSwizzlesForTesting()
+        let originalAppDelegate = AppDelegate.shared
+        let appDelegate = originalAppDelegate ?? AppDelegate()
+        AppDelegate.shared = appDelegate
+        defer {
+            if originalAppDelegate == nil {
+                AppDelegate.shared = nil
+            }
+        }
+
+        let firstWindowId = UUID()
+        let secondWindowId = UUID()
+        let (firstWindow, firstWorkspace, firstTerminal) = makeWorkspaceTerminalWindow(
+            appDelegate: appDelegate,
+            windowId: firstWindowId
+        )
+        let (secondWindow, _, secondTerminal) = makeWorkspaceTerminalWindow(
+            appDelegate: appDelegate,
+            windowId: secondWindowId
+        )
+        defer {
+            closeWorkspaceTerminalWindow(firstWindow, appDelegate: appDelegate, windowId: firstWindowId)
+            closeWorkspaceTerminalWindow(secondWindow, appDelegate: appDelegate, windowId: secondWindowId)
+        }
+        firstWorkspace.setShortcutPassthrough(["cmd+t"])
+
+        let menuProbe = MenuActionProbe()
+        let previousMenu = installCommandTMenu(probe: menuProbe)
+        defer { NSApp.mainMenu = previousMenu }
+
+        guard let staleEvent = makeCommandTKeyDownEvent(windowNumber: firstWindow.windowNumber) else {
+            Issue.record("Failed to construct stale Cmd+T key event")
+            return
+        }
+
+        #expect(secondWindow.performKeyEquivalent(with: staleEvent))
+        #expect(menuProbe.callCount == 1)
+        #expect(firstTerminal.keyDownEvents.isEmpty)
+        #expect(secondTerminal.keyDownEvents.isEmpty)
+    }
+
+    private func makeWorkspaceTerminalWindow(
+        appDelegate: AppDelegate,
+        windowId: UUID
+    ) -> (NSWindow, Workspace, PassthroughTerminalProbeView) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.identifier = NSUserInterfaceItemIdentifier("cmux.main.\(windowId.uuidString)")
+        let container = NSView(frame: window.contentRect(forFrameRect: window.frame))
+        window.contentView = container
+
+        let manager = TabManager()
+        let workspace = manager.selectedWorkspace!
+        let terminal = PassthroughTerminalProbeView(frame: container.bounds)
+        terminal.tabId = workspace.id
+        terminal.terminalSurface = workspace.focusedPanelId
+            .flatMap { workspace.terminalPanel(for: $0)?.surface }
+        container.addSubview(terminal)
+        _ = window.makeFirstResponder(terminal)
+        appDelegate.registerMainWindow(
+            window,
+            windowId: windowId,
+            tabManager: manager,
+            sidebarState: SidebarState(),
+            sidebarSelectionState: SidebarSelectionState()
+        )
+        return (window, workspace, terminal)
+    }
+
+    private func closeWorkspaceTerminalWindow(
+        _ window: NSWindow,
+        appDelegate: AppDelegate,
+        windowId: UUID
+    ) {
+        appDelegate.unregisterMainWindowContextForTesting(windowId: windowId)
+        window.orderOut(nil)
+        window.close()
+    }
+
+    private func makeCommandTKeyDownEvent(windowNumber: Int) -> NSEvent? {
+        NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: windowNumber,
+            context: nil,
+            characters: "t",
+            charactersIgnoringModifiers: "t",
+            isARepeat: false,
+            keyCode: UInt16(kVK_ANSI_T)
+        )
+    }
+
+    private func installCommandTMenu(probe: MenuActionProbe) -> NSMenu? {
+        let previousMenu = NSApp.mainMenu
+        let menu = NSMenu(title: "Main")
+        let item = NSMenuItem(
+            title: "New Workspace",
+            action: #selector(MenuActionProbe.perform(_:)),
+            keyEquivalent: "t"
+        )
+        item.keyEquivalentModifierMask = [.command]
+        item.target = probe
+        menu.addItem(item)
+        NSApp.mainMenu = menu
+        return previousMenu
     }
 }

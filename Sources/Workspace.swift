@@ -158,7 +158,10 @@ extension Workspace {
             progress: progressSnapshot,
             gitBranch: gitBranchSnapshot,
             remote: remoteConfiguration?.sessionSnapshot(),
-            environment: workspaceEnvironment.isEmpty ? nil : workspaceEnvironment
+            environment: workspaceEnvironment.isEmpty ? nil : workspaceEnvironment,
+            shortcutPassthrough: shortcutPassthrough.isEmpty
+                ? nil
+                : shortcutPassthrough.map(\.configIdentifier).sorted()
         )
         snapshot.captureTodoState(from: self)
         return snapshot
@@ -216,6 +219,7 @@ extension Workspace {
         // every restored terminal (all of which spawn fresh shells — PTYs do not
         // survive an app restart) inherits it through `newTerminalSurface`.
         workspaceEnvironment = Self.sanitizedWorkspaceEnvironment(snapshot.environment ?? [:])
+        setShortcutPassthrough(snapshot.shortcutPassthrough)
 
         let panelSnapshotsById = Dictionary(uniqueKeysWithValues: snapshot.panels.map { ($0.id, $0) })
         let shouldRestoreSingleDefaultCloudTerminal =

@@ -1776,6 +1776,9 @@ struct SessionWorkspaceSnapshot: Codable, Sendable {
     var remote: SessionRemoteWorkspaceSnapshot?
     /// Optional so manifests written before this field decode cleanly.
     var environment: [String: String]? = nil
+    /// Normalized terminal-owned cmux shortcut identifiers. Optional so older
+    /// manifests restore without a migration.
+    var shortcutPassthrough: [String]? = nil
     /// Manual task-status override raw values and the persisted checklist. Optional-with-nil-default
     /// (the `groupId` back-compat pattern); bridging to/from live `WorkspaceTodoState` lives in `SessionPersistence+Todos.swift`.
     var taskStatusOverride: String? = nil

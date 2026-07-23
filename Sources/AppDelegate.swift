@@ -6442,11 +6442,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     /// Whether a configured workspace shortcut belongs to the focused terminal,
-    /// rather than cmux. This resolves only the live responder and in-memory
-    /// workspace state, so it is safe to call for every key event.
-    func shouldPassthroughFocusedTerminalShortcut(event: NSEvent) -> Bool {
-        guard let terminalContext = focusedTerminalShortcutContext(preferredWindow: event.window),
-              let workspace = terminalContext.tabManager.tabs.first(where: { $0.id == terminalContext.workspaceId }) else {
+    /// rather than cmux. The caller supplies its authoritative window because
+    /// key-equivalent events can retain stale window metadata.
+    func shouldPassthroughFocusedTerminalShortcut(
+        event: NSEvent,
+        preferredWindow: NSWindow?
+    ) -> Bool {
+        let targetWindow = preferredWindow ?? mainWindowForShortcutEvent(event) ?? shortcutRoutingActiveWindow
+        guard let ghosttyView = shortcutRoutingFirstResponder(preferredWindow: targetWindow)
+            .cmuxStrictOwningGhosttyView(),
+              let workspaceId = ghosttyView.tabId,
+              let manager = resolveShortcutTabManager(for: workspaceId, preferredWindow: targetWindow),
+              let workspace = manager.tabs.first(where: { $0.id == workspaceId }) else {
             return false
         }
         return workspace.matchesShortcutPassthrough(event: event)
@@ -12814,7 +12821,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             clearConfiguredShortcutChordState()
             return false
         }
-        if shouldPassthroughFocusedTerminalShortcut(event: event) {
+        if shouldPassthroughFocusedTerminalShortcut(
+            event: event,
+            preferredWindow: mainWindowForShortcutEvent(event)
+        ) {
             clearConfiguredShortcutChordState()
             return false
         }
@@ -16976,7 +16986,10 @@ private extension NSWindow {
             return true
         }
         if let firstResponderGhosttyView,
-           AppDelegate.shared?.shouldPassthroughFocusedTerminalShortcut(event: event) == true {
+           AppDelegate.shared?.shouldPassthroughFocusedTerminalShortcut(
+               event: event,
+               preferredWindow: self
+           ) == true {
             return cmuxForceDispatchKeyDownOnce(
                 event,
                 to: firstResponderGhosttyView,
