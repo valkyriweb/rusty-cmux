@@ -43,6 +43,93 @@ final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
         super.tearDown()
     }
 
+    func testFocusedTerminalShortcutPassthroughBypassesOnlyConfiguredChords() {
+        guard let appDelegate = AppDelegate.shared else {
+            XCTFail("Expected AppDelegate.shared")
+            return
+        }
+
+        let windowId = appDelegate.createMainWindow()
+        defer { closeWindow(withId: windowId) }
+
+        guard let window = window(withId: windowId),
+              let manager = appDelegate.tabManagerFor(windowId: windowId),
+              let workspace = manager.selectedWorkspace else {
+            XCTFail("Expected test window, manager, and workspace")
+            return
+        }
+
+        window.makeKeyAndOrderFront(nil)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        let passthroughs: [(String, UInt16, NSEvent.ModifierFlags)] = [
+            ("t", 17, [.command]),
+            ("n", 45, [.command]),
+            ("\t", 48, [.control]),
+            ("\t", 48, [.control, .shift]),
+        ]
+        workspace.setShortcutPassthrough([
+            "cmd+t",
+            "cmd+n",
+            "ctrl+tab",
+            "ctrl+shift+tab",
+        ])
+
+        for (key, keyCode, modifiers) in passthroughs {
+            guard let event = makeKeyDownEvent(
+                key: key,
+                keyCode: keyCode,
+                modifiers: modifiers,
+                windowNumber: window.windowNumber
+            ) else {
+                XCTFail("Failed to construct shortcut event")
+                return
+            }
+#if DEBUG
+            XCTAssertFalse(appDelegate.debugHandleCustomShortcut(event: event))
+#else
+            XCTFail("debugHandleCustomShortcut is only available in DEBUG")
+#endif
+        }
+
+        workspace.setShortcutPassthrough([])
+        for (key, keyCode, modifiers) in passthroughs {
+            guard let event = makeKeyDownEvent(
+                key: key,
+                keyCode: keyCode,
+                modifiers: modifiers,
+                windowNumber: window.windowNumber
+            ) else {
+                XCTFail("Failed to construct shortcut event")
+                return
+            }
+#if DEBUG
+            XCTAssertTrue(appDelegate.debugHandleCustomShortcut(event: event))
+#else
+            XCTFail("debugHandleCustomShortcut is only available in DEBUG")
+#endif
+        }
+
+        for (key, keyCode, modifiers) in passthroughs {
+            manager.selectWorkspace(workspace)
+            _ = manager.openBrowser(inWorkspace: workspace.id)
+            guard let event = makeKeyDownEvent(
+                key: key,
+                keyCode: keyCode,
+                modifiers: modifiers,
+                windowNumber: window.windowNumber
+            ) else {
+                XCTFail("Failed to construct shortcut event")
+                return
+            }
+#if DEBUG
+            XCTAssertTrue(appDelegate.debugHandleCustomShortcut(event: event))
+#else
+            XCTFail("debugHandleCustomShortcut is only available in DEBUG")
+#endif
+        }
+    }
+
     func testBareSpaceShortcutDispatchesConfiguredAction() {
         guard let appDelegate = AppDelegate.shared else {
             XCTFail("Expected AppDelegate.shared")
@@ -189,12 +276,13 @@ final class AppDelegateBareSpaceShortcutRoutingTests: XCTestCase {
     private func makeKeyDownEvent(
         key: String,
         keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags = [],
         windowNumber: Int
     ) -> NSEvent? {
         NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
-            modifierFlags: [],
+            modifierFlags: modifiers,
             timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: windowNumber,
             context: nil,
