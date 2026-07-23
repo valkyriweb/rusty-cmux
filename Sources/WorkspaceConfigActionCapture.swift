@@ -114,6 +114,9 @@ extension Workspace {
         definition.name = customTitle
         definition.cwd = workspaceCwd.isEmpty ? nil : workspaceCwd
         definition.color = customColor
+        definition.shortcutPassthrough = shortcutPassthrough.isEmpty
+            ? nil
+            : shortcutPassthrough.map(\.configIdentifier).sorted()
         // Deliberately no env: workspaceEnvironment values can be secrets and
         // the dialog can only disclose keys. Users add env by hand via
         // Customize Workspace Layouts when they want it persisted.

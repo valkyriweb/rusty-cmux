@@ -1704,6 +1704,9 @@
             "codeLineHeight": "Line-height multiplier used for Agent Chat code blocks."
           }
         },
+        "workspace": {
+          "shortcutPassthrough": "cmux shortcuts that bypass cmux and go to the focused terminal in this workspace."
+        },
         "automation": {
           "ampIntegration": "Enable cmux integration hooks for Amp. When disabled, the bundled plugin stays inactive without needing to be removed.",
           "suppressSubagentNotifications": "Suppress visible completion notifications and status mutations from nested Codex or Claude child agents while keeping their events in Feed telemetry.",
@@ -1874,6 +1877,7 @@
       "wsFieldColor": "Workspace tab color",
       "wsFieldEnv": "Environment variables inherited by every shell in the workspace",
       "wsFieldSetup": "Bootstrap command sent to the workspace's first terminal before that terminal's own command",
+      "wsFieldShortcutPassthrough": "cmux shortcuts to send to the focused terminal instead (for example, [\"cmd+t\", \"ctrl+tab\"])",
       "wsFieldLayout": "Layout tree defining splits and panes",
       "restartBehavior": "Restart behavior",
       "restartBehaviorDesc": "Controls what happens when a workspace with the same name already exists:",

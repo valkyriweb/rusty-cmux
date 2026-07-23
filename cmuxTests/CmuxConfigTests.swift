@@ -31,6 +31,40 @@ final class CmuxConfigDecodingTests: XCTestCase {
         )
     }
 
+    func testDecodeShortcutPassthroughNormalizesAndRejectsMalformedShortcuts() throws {
+        let json = """
+        {
+          "commands": [{
+            "name": "Nested Terminal",
+            "workspace": {
+              "shortcutPassthrough": [
+                "Command+T",
+                "ctrl+tab",
+                "control+shift+tab",
+                "cmd+t"
+              ]
+            }
+          }]
+        }
+        """
+
+        let workspace = try XCTUnwrap(try decode(json).commands.first?.workspace)
+        XCTAssertEqual(
+            workspace.shortcutPassthrough,
+            ["cmd+t", "ctrl+tab", "ctrl+shift+tab"]
+        )
+
+        let malformed = """
+        {
+          "commands": [{
+            "name": "Broken",
+            "workspace": { "shortcutPassthrough": ["cmd+not-a-key"] }
+          }]
+        }
+        """
+        XCTAssertThrowsError(try decode(malformed))
+    }
+
     // MARK: Simple commands
 
     func testDecodeSimpleCommand() throws {
