@@ -7,6 +7,9 @@ use std::str;
 use nucleo::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo::{Config, Matcher, Utf32Str};
 
+#[cfg(test)]
+mod tests;
+
 #[repr(C)]
 pub struct CmuxNucleoCandidateSpan {
     title_offset: usize,
