@@ -283,14 +283,19 @@ def _launch_startup_command_pty(startup_command: str, workspace_id: str, surface
     env["CMUX_PANEL_ID"] = surface_id
 
     master_fd, slave_fd = pty.openpty()
-    proc = subprocess.Popen(
-        ["/bin/sh", "-lc", startup_command],
-        stdin=slave_fd,
-        stdout=slave_fd,
-        stderr=slave_fd,
-        env=env,
-        start_new_session=True,
-    )
+    try:
+        proc = subprocess.Popen(
+            ["/bin/sh", "-lc", startup_command],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            env=env,
+            start_new_session=True,
+        )
+    except Exception:
+        os.close(slave_fd)
+        os.close(master_fd)
+        raise
     os.close(slave_fd)
     return proc, master_fd
 
@@ -632,8 +637,9 @@ def main() -> int:
                 f"ssh-env should propagate TERM_PROGRAM=ghostty when AcceptEnv allows it, got: {term_program!r}",
             )
 
-            term_program_version = _read_probe_payload(client, surface_id, "printf '%s' \"${TERM_PROGRAM_VERSION:-}\"")
-            _must(bool(term_program_version), "ssh-env should propagate non-empty TERM_PROGRAM_VERSION")
+            # TERM_PROGRAM_VERSION is not asserted: cmux terminals blank it so
+            # Codex keeps copy-on-select, so the remote may receive it empty
+            # (https://github.com/manaflow-ai/cmux/issues/22585).
 
             tty_retry_token = f"CMUX_TTY_RETRY_{secrets.token_hex(6)}"
             client.send_surface(surface_id, f"echo {tty_retry_token}\n")
